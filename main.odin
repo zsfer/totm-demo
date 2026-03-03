@@ -3,6 +3,8 @@ package main
 
 import "core:fmt"
 import "core:log"
+import "core:math/rand"
+import la "core:math/linalg"
 import rl "vendor:raylib"
 
 v2 :: rl.Vector2
@@ -43,6 +45,7 @@ Game :: struct {
 	stars: u8,
 
 	player: Player,
+	cam_intensity: f32,
 
 	is_finished: bool,
 }
@@ -69,16 +72,23 @@ get_player_rect :: proc( player: ^Player ) -> rl.Rectangle {
 }
 
 player_draw  :: proc( player: ^Player ) {
-	if game.player == {} {
+	if player == nil {
 		return
 	}
 
-	rl.DrawTextureRec( 
-		game.atlas, 
-		rl.Rectangle{ 0, 0, TILE_SIZE, TILE_SIZE }, 
-		player.pos,
-		rl.WHITE 
-	)
+	actual_pos := player.pos + TILE_SIZE / 2
+	if rl.Vector2LengthSqr( player.vel ) != 0 {
+		rl.DrawCircle( i32(actual_pos.x), i32(actual_pos.y), (TILE_SIZE / 2) - 1, rl.YELLOW )
+	} else {
+		rl.DrawTexturePro(
+			game.atlas, 
+			rl.Rectangle{ 0, 0, TILE_SIZE, TILE_SIZE },
+			rl.Rectangle{ actual_pos.x, actual_pos.y, TILE_SIZE, TILE_SIZE },
+			{ TILE_SIZE / 2, TILE_SIZE / 2 },
+			player.rot,
+			rl.WHITE
+		)
+	}
 }
 
 map_load :: proc( game: ^Game, path: cstring ) {
@@ -132,13 +142,29 @@ map_draw :: proc( game: ^Game ) {
 				continue
 			}
 
-			rl.DrawTextureRec(
+			rl.DrawTexturePro(
 				game.atlas,
 				tile.rect,
-				v2{tile.world_rect.x, tile.world_rect.y},
+				tile.world_rect,
+				v2(0),
+				0,
 				rl.WHITE
 			)
 		}
+	}
+}
+
+handle_camera_shake :: proc( cam: ^rl.Camera2D, intensity: ^f32, decay: f32 ) {
+	if intensity^ > 0.1 {
+		offset_x := (rand.float32() * 2.0 - 1.0) * intensity^
+		offset_y := (rand.float32() * 2.0 - 1.0) * intensity^
+
+		cam.offset.x += offset_x
+		cam.offset.y += offset_y
+
+		intensity^ *= decay
+	} else {
+		intensity^ = 0
 	}
 }
 
@@ -166,6 +192,9 @@ main :: proc() {
 
 	for( !rl.WindowShouldClose() ) {
 		using game
+		// reset camera intensity
+		camera.offset = v2{ f32(rl.GetScreenWidth()) / 2, f32(rl.GetScreenHeight()) / 2 }
+
 		// :update
 		dt := rl.GetFrameTime()
 
@@ -192,17 +221,22 @@ main :: proc() {
 					if rl.CheckCollisionRecs( get_player_rect( &player ), tile.world_rect ) {
 						#partial switch tile.id {
 						case .Wall: {
-							if player.vel.x > 0 {
+							if player.vel.x > 0 { // right
 								player.pos.x = tile.world_rect.x - TILE_SIZE
-							} else if player.vel.x < 0 {
+								player.rot = -90 
+							} else if player.vel.x < 0 { // left
 								player.pos.x = tile.world_rect.x + TILE_SIZE
-							} else if player.vel.y > 0 {
+								player.rot = 90
+							} else if player.vel.y > 0 { // down
 								player.pos.y = tile.world_rect.y - TILE_SIZE
-							} else if player.vel.y < 0 {
+								player.rot = 0
+							} else if player.vel.y < 0 { // up
 								player.pos.y = tile.world_rect.y + TILE_SIZE
+								player.rot = 180
 							}
 
 							player.vel = v2(0.0)
+							game.cam_intensity += 5.0
 						}
 						case .Star: {
 							game.stars += 1
@@ -224,7 +258,8 @@ main :: proc() {
 				}
 			}
 
-			camera.target = player.pos + TILE_SIZE / 2
+			camera.target = la.lerp( camera.target, player.pos + TILE_SIZE / 2, 8 * dt )
+			handle_camera_shake( &camera, &game.cam_intensity, 0.85 )
 		}
 		// :draw
 		rl.BeginDrawing()
