@@ -26,6 +26,7 @@ Player :: struct {
 	pos: v2,
 	rot: f32,
 	vel: v2,
+	last_pos: v2,
 }
 
 World_Tile :: struct {
@@ -59,6 +60,7 @@ set_player :: proc( x, y: i32 ) {
 		{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE},
 		0,
 		v2(0.0),
+		v2(0.0),
 	}
 }
 
@@ -88,6 +90,10 @@ player_draw  :: proc( player: ^Player ) {
 			player.rot,
 			rl.WHITE
 		)
+	}
+
+	if player.vel != v2( 0.0 ) {
+		rl.DrawLineEx( player.last_pos + (TILE_SIZE / 2), player.pos + (TILE_SIZE / 2), (TILE_SIZE / 2), rl.YELLOW )
 	}
 }
 
@@ -227,18 +233,22 @@ main :: proc() {
 				if ( rl.IsKeyPressed( .RIGHT ) ) {
 					player.vel = v2{1, 0}
 					play_audio_random( audio.move )
+					player.last_pos = player.pos
 				}
 				if ( rl.IsKeyPressed( .LEFT ) ) {
 					player.vel = v2{-1, 0}
 					play_audio_random( audio.move )
+					player.last_pos = player.pos
 				}
 				if ( rl.IsKeyPressed( .UP ) ) {
 					player.vel = v2{0, -1}
 					play_audio_random( audio.move )
+					player.last_pos = player.pos
 				}
 				if ( rl.IsKeyPressed( .DOWN ) ) {
 					player.vel = v2{0, 1}
 					play_audio_random( audio.move )
+					player.last_pos = player.pos
 				}
 			}
 			player.pos += player.vel * PLAYER_SPEED * dt
