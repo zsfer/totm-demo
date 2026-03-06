@@ -205,6 +205,9 @@ main :: proc() {
 		TILE_SIZE,
 	}
 
+	pickup_counter_timer: f32 = 0.0
+	pickup_counter: i32 = 0
+
 	for( !rl.WindowShouldClose() ) {
 		using game
 		// reset camera intensity
@@ -262,6 +265,8 @@ main :: proc() {
 
 							player.vel = v2(0.0)
 							game.cam_intensity += 5.0
+
+							play_audio_random( audio.hit_wall )
 						}
 						case .Star: {
 							game.stars += 1
@@ -270,12 +275,15 @@ main :: proc() {
 						case .Coin: {
 							game.coins += 1
 							tile.id = .Hidden
-
-							// TODO(seifer): play audio
 						}
 						case .Point: {
 							game.points += 1
+							pickup_counter += 1
+							pickup_counter_timer = 1
 							tile.id = .Hidden
+
+							// TODO(seifer): play audio
+							play_audio_pitch_up_counter( audio.coin_pickup, pickup_counter )
 						}
 						case .Finish: {
 							game.is_finished = true
@@ -288,6 +296,14 @@ main :: proc() {
 			camera.target = la.lerp( camera.target, player.pos + TILE_SIZE / 2, 8 * dt )
 			handle_camera_shake( &camera, &game.cam_intensity, 0.85 )
 		}
+
+		if pickup_counter_timer > 0 {
+			pickup_counter_timer -= dt
+			if pickup_counter_timer <= 0 && pickup_counter != 0 {
+				pickup_counter = 0
+			}
+		}
+
 		// :draw
 		rl.BeginDrawing()
 		rl.ClearBackground( rl.BLACK )
