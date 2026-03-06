@@ -55,11 +55,11 @@ set_player :: proc( x, y: i32 ) {
 		return
 	}
 
-	game.player = Player{ 
+	game.player = Player{
 		{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE},
 		0,
 		v2(0.0),
-	} 
+	}
 }
 
 get_player_rect :: proc( player: ^Player ) -> rl.Rectangle {
@@ -81,7 +81,7 @@ player_draw  :: proc( player: ^Player ) {
 		rl.DrawCircle( i32(actual_pos.x), i32(actual_pos.y), (TILE_SIZE / 2) - 1, rl.YELLOW )
 	} else {
 		rl.DrawTexturePro(
-			game.atlas, 
+			game.atlas,
 			rl.Rectangle{ 0, 0, TILE_SIZE, TILE_SIZE },
 			rl.Rectangle{ actual_pos.x, actual_pos.y, TILE_SIZE, TILE_SIZE },
 			{ TILE_SIZE / 2, TILE_SIZE / 2 },
@@ -135,6 +135,19 @@ map_load :: proc( game: ^Game, path: cstring ) {
 	}
 }
 
+game_load :: proc( game: ^Game, map_path: cstring ) {
+	using game
+	is_finished = false
+	player = {}
+	cam_intensity = 0
+	points = 0
+	coins = 0
+	stars = 0
+	world = {}
+
+	map_load( game, map_path )
+}
+
 map_draw :: proc( game: ^Game ) {
 	for row in game.world {
 		for tile in row {
@@ -169,8 +182,10 @@ handle_camera_shake :: proc( cam: ^rl.Camera2D, intensity: ^f32, decay: f32 ) {
 }
 
 game: ^Game
+audio: Audio
 main :: proc() {
 	game = new(Game)
+	load_audio( &audio )
 
 	// setup game window
 	rl.InitWindow( 800, 800, "Tomb of the Mask in Odin!" )
@@ -180,7 +195,7 @@ main :: proc() {
 	game.atlas = rl.LoadTexture( "game_atlas.png" )
 
 	// load map
-	map_load( game, "totm-map01.png" )
+	game_load( game, "totm-map01.png" )
 
 	game.camera = rl.Camera2D {
 		v2{ f32(rl.GetScreenWidth()) / 2, f32(rl.GetScreenHeight()) / 2 },
@@ -198,19 +213,29 @@ main :: proc() {
 		// :update
 		dt := rl.GetFrameTime()
 
+		if game.is_finished {
+			if rl.IsKeyPressed( .R ) {
+				game_load( game, "totm-map01.png" )
+			}
+		}
+
 		if player != {} && !game.is_finished {
 			if player.vel == v2(0.0) {
 				if ( rl.IsKeyPressed( .RIGHT ) ) {
 					player.vel = v2{1, 0}
+					play_audio_random( audio.move )
 				}
 				if ( rl.IsKeyPressed( .LEFT ) ) {
 					player.vel = v2{-1, 0}
+					play_audio_random( audio.move )
 				}
 				if ( rl.IsKeyPressed( .UP ) ) {
 					player.vel = v2{0, -1}
+					play_audio_random( audio.move )
 				}
 				if ( rl.IsKeyPressed( .DOWN ) ) {
 					player.vel = v2{0, 1}
+					play_audio_random( audio.move )
 				}
 			}
 			player.pos += player.vel * PLAYER_SPEED * dt
@@ -223,7 +248,7 @@ main :: proc() {
 						case .Wall: {
 							if player.vel.x > 0 { // right
 								player.pos.x = tile.world_rect.x - TILE_SIZE
-								player.rot = -90 
+								player.rot = -90
 							} else if player.vel.x < 0 { // left
 								player.pos.x = tile.world_rect.x + TILE_SIZE
 								player.rot = 90
@@ -245,6 +270,8 @@ main :: proc() {
 						case .Coin: {
 							game.coins += 1
 							tile.id = .Hidden
+
+							// TODO(seifer): play audio
 						}
 						case .Point: {
 							game.points += 1
@@ -277,12 +304,13 @@ main :: proc() {
 		star_text := fmt.ctprint( STARS_STRING[:game.stars] )
 		rl.DrawText( star_text, (rl.GetScreenWidth() - rl.MeasureText( star_text, 32 )) / 2, rl.GetScreenHeight() - 96, 32, rl.WHITE )
 
+		t: cstring = "YOU'VE ESCAPED!\nPress R to restart";
 		if game.is_finished {
-			rl.DrawText( 
-				"YOU'VE ESCAPED.", 
-				(rl.GetScreenWidth() - rl.MeasureText( "YOU'VE ESCAPED", 50 )) / 2, rl.GetScreenHeight() / 2, 
-				50, 
-				rl.GREEN 
+			rl.DrawText(
+				t,
+				(rl.GetScreenWidth() - rl.MeasureText( t, 50 )) / 2, rl.GetScreenHeight() / 2,
+				50,
+				rl.GREEN
 			)
 		}
 
