@@ -8,9 +8,13 @@ import la "core:math/linalg"
 import rl "vendor:raylib"
 
 v2 :: rl.Vector2
+
+// :constants
 TILE_SIZE :: f32(8.0)
 PLAYER_SPEED :: 250
 STARS_STRING := "*****"
+WALL_HIT_INTENSITY :: 10
+CAM_DECAY :: 0.85
 
 Tile_Ids :: enum u8 {
 	Player = 0,
@@ -195,7 +199,7 @@ main :: proc() {
 
 	// setup game window
 	rl.InitWindow( 800, 800, "Tomb of the Mask in Odin!" )
-	rl.SetTargetFPS( 60 )
+	rl.SetTargetFPS( 140 )
 
 	// load sprite atlas
 	game.atlas = rl.LoadTexture( "game_atlas.png" )
@@ -211,7 +215,6 @@ main :: proc() {
 		TILE_SIZE,
 	}
 
-	pickup_counter_timer: f32 = 0.0
 	pickup_counter: i32 = 0
 
 	for( !rl.WindowShouldClose() ) {
@@ -228,24 +231,28 @@ main :: proc() {
 			}
 		}
 
+		if rl.IsKeyPressed( .F10 ) {
+			break;
+		}
+
 		if player != {} && !game.is_finished {
 			if player.vel == v2(0.0) {
-				if ( rl.IsKeyPressed( .RIGHT ) ) {
+				if ( rl.IsKeyPressed( .RIGHT ) || rl.IsKeyPressed( .D ) ) {
 					player.vel = v2{1, 0}
 					play_audio_random( audio.move )
 					player.last_pos = player.pos
 				}
-				if ( rl.IsKeyPressed( .LEFT ) ) {
+				if ( rl.IsKeyPressed( .LEFT ) || rl.IsKeyPressed( .A )) {
 					player.vel = v2{-1, 0}
 					play_audio_random( audio.move )
 					player.last_pos = player.pos
 				}
-				if ( rl.IsKeyPressed( .UP ) ) {
+				if ( rl.IsKeyPressed( .UP ) || rl.IsKeyPressed( .W )) {
 					player.vel = v2{0, -1}
 					play_audio_random( audio.move )
 					player.last_pos = player.pos
 				}
-				if ( rl.IsKeyPressed( .DOWN ) ) {
+				if ( rl.IsKeyPressed( .DOWN ) || rl.IsKeyPressed( .S )) {
 					player.vel = v2{0, 1}
 					play_audio_random( audio.move )
 					player.last_pos = player.pos
@@ -274,7 +281,8 @@ main :: proc() {
 							}
 
 							player.vel = v2(0.0)
-							game.cam_intensity += 5.0
+							game.cam_intensity += WALL_HIT_INTENSITY
+							pickup_counter = 0
 
 							play_audio_random( audio.hit_wall )
 						}
@@ -289,7 +297,6 @@ main :: proc() {
 						case .Point: {
 							game.points += 1
 							pickup_counter += 1
-							pickup_counter_timer = 1
 							tile.id = .Hidden
 
 							// TODO(seifer): play audio
@@ -304,14 +311,7 @@ main :: proc() {
 			}
 
 			camera.target = la.lerp( camera.target, player.pos + TILE_SIZE / 2, 8 * dt )
-			handle_camera_shake( &camera, &game.cam_intensity, 0.85 )
-		}
-
-		if pickup_counter_timer > 0 {
-			pickup_counter_timer -= dt
-			if pickup_counter_timer <= 0 && pickup_counter != 0 {
-				pickup_counter = 0
-			}
+			handle_camera_shake( &camera, &game.cam_intensity, CAM_DECAY )
 		}
 
 		// :draw
@@ -330,8 +330,8 @@ main :: proc() {
 		star_text := fmt.ctprint( STARS_STRING[:game.stars] )
 		rl.DrawText( star_text, (rl.GetScreenWidth() - rl.MeasureText( star_text, 32 )) / 2, rl.GetScreenHeight() - 96, 32, rl.WHITE )
 
-		t: cstring = "YOU'VE ESCAPED!\nPress R to restart";
 		if game.is_finished {
+			t: cstring = "YOU'VE ESCAPED!\nPress R to restart";			
 			rl.DrawText(
 				t,
 				(rl.GetScreenWidth() - rl.MeasureText( t, 50 )) / 2, rl.GetScreenHeight() / 2,
